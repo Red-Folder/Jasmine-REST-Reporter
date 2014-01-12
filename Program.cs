@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http.Formatting;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,34 +20,112 @@ namespace JasmineReceiver
 
         static void Main(string[] args)
         {
-            var config = new HttpSelfHostConfiguration("http://192.168.0.6:8181");
+            Console.WriteLine("Jasmine REST Receiver - https://github.com/Red-Folder/Jasmine-REST-Reporter");
+            Console.WriteLine("Run with --help for usage");
+            Console.WriteLine();
 
-            FormatterConfig.RegisterFormatters(config.Formatters);
+            // Set up our initial vaiables
+            String ipAddress = LocalIPAddress().ToString();
+            String port = "8181";
+            int secondsToWait = 10 * 60;    // 10 minutes
+            Boolean helpOnly = false;
 
-            config.Routes.MapHttpRoute(
-                name: "DefaultApi",
-                routeTemplate: "api/{controller}/{action}",
-                defaults: new { controller = "logger", action = "get", format = "jsonp" }
-            );
-
-
-            using (HttpSelfHostServer server = new HttpSelfHostServer(config))
+            // See we have parameters passed in
+            foreach (var arg in args)
             {
-                try
+                // User wants usage instructions
+                if (arg.StartsWith("--help", StringComparison.CurrentCultureIgnoreCase))
                 {
-                    Console.WriteLine("Waiting ... ");
-                    server.OpenAsync().Wait();
-                    shutdown.WaitOne(5 * 60 * 1000);    // wait for 5 minutes
+                    Console.WriteLine("Usage: JasmineReceiver [options]");
+                    Console.WriteLine("Options:");
+                    Console.WriteLine("--help - this usage message");
+                    Console.WriteLine("--ipaddress={ipaddress} - set ip address to listen on");
+                    Console.WriteLine("--port={port} - port to listen on");
+                    Console.WriteLine("--timeout={seconds} - number of seconds to wait for communication before timing out");
+
+                    helpOnly = true;
+                    returnCode = 0;
                 }
-                catch (Exception ex)
+
+                if (arg.StartsWith("--ipaddress", StringComparison.CurrentCultureIgnoreCase))
+                    ipAddress = arg.Split('=')[1];
+
+                if (arg.StartsWith("--port", StringComparison.CurrentCultureIgnoreCase))
+                    port = arg.Split('=')[1];
+
+                if (arg.StartsWith("--timeout", StringComparison.CurrentCultureIgnoreCase))
+                    secondsToWait = int.Parse(arg.Split('=')[1]);
+
+            }
+
+            if (!helpOnly)
+            {
+
+                String url = "http://" + ipAddress + ":" + port;
+                Console.WriteLine("Attempting to listen on {0}", url);
+                var config = new HttpSelfHostConfiguration(url);
+
+                FormatterConfig.RegisterFormatters(config.Formatters);
+
+                config.Routes.MapHttpRoute(
+                    name: "DefaultApi",
+                    routeTemplate: "api/{controller}/{action}",
+                    defaults: new { controller = "logger", action = "get", format = "jsonp" }
+                );
+
+                using (HttpSelfHostServer server = new HttpSelfHostServer(config))
                 {
-                    Console.WriteLine(ex);
+                    try
+                    {
+                        Console.WriteLine("Opening server ... ");
+                        server.OpenAsync().Wait();
+                        Console.WriteLine("Waiting ... ");
+                        shutdown.WaitOne(secondsToWait * 1000);
+                    }
+                    catch (System.AggregateException exceptions)
+                    {
+                        exceptions.Handle((x) =>
+                        {
+                            // We know this is a lack of permissions
+                            if (x is System.ServiceModel.AddressAccessDeniedException) // This we know how to handle.
+                            {
+                                Console.WriteLine("Permissions need to allow this application to run on port {0}", port);
+                                Console.WriteLine("Either run as Administrator or run the below from the command line");
+                                Console.WriteLine("");
+                                Console.WriteLine("netsh http add urlacl url=http://+:{0}/ user=\"{1}\"", port, System.Security.Principal.WindowsIdentity.GetCurrent().Name);
+                                Console.WriteLine("");
+                                Console.WriteLine("If you get \"Url reservation add failed, Error: 183\", then delete the current reservation using:");
+                                Console.WriteLine("");
+                                Console.WriteLine("netsh http delete urlacl url=http://+:{0}/", port);
+                                return true;
+                            }
+                            return false; // Let anything else stop the application.
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex);
+                    }
+
                 }
 
                 Console.WriteLine("Returning - " + returnCode);
                 System.Environment.Exit(returnCode);
             }
 
+        }
+
+        private static IPAddress LocalIPAddress() {
+            if (!System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable())
+            {
+                return null;
+            }
+
+            IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
+
+            return host
+                .AddressList
+                .FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork);
         }
     }
 }

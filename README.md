@@ -2,14 +2,12 @@
 
 A reporter for use with the Jasmine BDD framework.  This reporter sends the results via REST to a receiver (Windows Console application).
 
-The receiver has been written to be used with Jenkins CI to automate the testing of an Android application (although I'm sure it can be used for more).  The receiver is used by Jenkins to wait for the Jasmine tests to be run.  Jasmine, using the REST reporter, will send the results of each spec and suite to the receiver.  The receiver will error (returns an error code to Jenkins) if any of the tests fail, none of the tests run or after a timeout period (5 minutes).  Jenkins will then act of the result code.
+The receiver has been written to be used with Jenkins CI to automate the testing of an Android application (although I'm sure it can be used for more).  The receiver is used by Jenkins to wait for the Jasmine tests to be run.  Jasmine, using the REST reporter, will send the results of each spec and suite to the receiver.  The receiver will error (returns an error code to Jenkins) if any of the tests fail, none of the tests run or after a timeout period (10 minutes by default).  Jenkins will then act of the result code.
 
 ## Change Log ##
 
+* 12th January 2014 - Removed the hardcoding elements
 * 11th August 2013 - Original version
-
-# Hardcoding #
-At the time of writting all of the URL details are hardcoded.  I've provided notes below on what to watch for.
 
 # How to use #
 
@@ -22,10 +20,10 @@ The jasmine_rest_reporter.js is used within your Jasmine tests.  Using the examp
 3) Amend the PluginSpecRunner.html to include script links to those two .js files
 4) Amend the PluginSpecRunner.html to include the following lines just after the htmlReporter is added to the jasmineEnv:
 
-      var restReporter = new jasmine.RESTReporter();
+      var restReporter = new jasmine.RESTReporter("http://192.168.0.7:8181");
       jasmineEnv.addReporter(restReporter);
 
-NOTE: jasmine_rest_reporter.js is hardcoded to a specific URL.  This will likely need to be amended for your environment.
+NOTE: That the specific URL will likely need to be amended for your environment.
 
 ## The receiver bit ##
 
@@ -46,7 +44,13 @@ You can build the receiver using Visual Studio 2012 Express for Windows Desktop 
 
 This should give you a Console Application ready to use
 
-NOTE: The Receiver is hardcoded to a specific URL (see program.cs).  This will likely need to be amended for your environment.
+The Receiver can be run with the following options:
+
+* --help - produces a usage message
+* --ipaddress={ipaddress} - set ip address to listen on - defaults to first local IP address 
+* --port={port} - port to listen on - defaults to 8181
+* --timeout={seconds} - number of seconds to wait for communication before timing out - defaults to 10 minutes
+
 
 ## The permissions bit ##
 
